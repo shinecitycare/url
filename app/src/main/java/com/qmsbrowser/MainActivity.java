@@ -206,12 +206,9 @@ public class MainActivity extends Activity {
                         openNativeRemoteController(launchUri.toString());
                         launchUri = null;
                     }
-                    String startUrl = launchUri != null
-                            ? launchUri.toString()
-                            : BrowserPreferences.get(this).getString(
-                                    BrowserPreferences.START_URL,
-                                    BrowserPreferences.DEFAULT_START_URL
-                            );
+                    // Company-specific APK: always open its build-configured startup URL.
+                    // Ignore arbitrary launch/deep-link URLs so the company URL cannot be overridden.
+                    String startUrl = BrowserPreferences.DEFAULT_START_URL;
                     navigateTo(startUrl, false);
                 }
             });
@@ -441,6 +438,13 @@ public class MainActivity extends Activity {
         addressBar.setBackgroundColor(Color.TRANSPARENT);
         addressBar.setPadding(dp(8), 0, dp(6), 0);
         addressBar.setImeOptions(EditorInfo.IME_ACTION_GO);
+        // Company kiosk mode: URL is display-only and cannot be edited by end users.
+        addressBar.setKeyListener(null);
+        addressBar.setFocusable(false);
+        addressBar.setFocusableInTouchMode(false);
+        addressBar.setCursorVisible(false);
+        addressBar.setLongClickable(false);
+        addressBar.setTextIsSelectable(false);
         addressBar.setOnFocusChangeListener((view, focused) -> {
             setAddressFocused(focused);
             if (focused) {
@@ -473,11 +477,9 @@ public class MainActivity extends Activity {
         addressContainer.addView(addressBar, new LinearLayout.LayoutParams(0, dp(42), 1));
 
         clearAddressButton = toolbarButton(R.drawable.ic_close, "Clear address");
+        // URL is locked in company APKs; the clear/edit control is disabled.
         clearAddressButton.setVisibility(View.GONE);
-        clearAddressButton.setOnClickListener(v -> {
-            addressBar.setText("");
-            addressBar.requestFocus();
-        });
+        clearAddressButton.setEnabled(false);
         addressContainer.addView(
                 clearAddressButton,
                 new LinearLayout.LayoutParams(dp(36), dp(36))
@@ -677,11 +679,8 @@ public class MainActivity extends Activity {
     }
 
     private void navigateFromAddressBar() {
-        navigateTo(normalizeAddress(addressBar.getText().toString()), true);
+        // Address bar is display-only in company-specific kiosk APKs.
         addressBar.clearFocus();
-        InputMethodManager keyboard =
-                (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
-        keyboard.hideSoftInputFromWindow(addressBar.getWindowToken(), 0);
         scheduleToolbarHide();
     }
 
@@ -764,13 +763,8 @@ public class MainActivity extends Activity {
         popup.setElevation(dp(12));
         popup.setOutsideTouchable(true);
 
-        addMenuRow(menu, R.drawable.ic_home, "Home", () -> navigateTo(
-                BrowserPreferences.get(this).getString(
-                        BrowserPreferences.START_URL,
-                        BrowserPreferences.DEFAULT_START_URL
-                ),
-                true
-        ), popup);
+        addMenuRow(menu, R.drawable.ic_home, "Home",
+                () -> navigateTo(BrowserPreferences.DEFAULT_START_URL, true), popup);
         addMenuRow(menu, R.drawable.ic_share, "Share page", this::shareCurrentPage, popup);
         addMenuRow(menu, R.drawable.ic_search, "Find in page", this::showFindDialog, popup);
         boolean mobile = webView.getSettings().getUserAgentString().equals(mobileUserAgent);
@@ -1070,19 +1064,15 @@ public class MainActivity extends Activity {
 
     private void applyPreferences(boolean fromSettings) {
         SharedPreferences preferences = BrowserPreferences.get(this);
-        String newStartUrl = preferences.getString(
-                BrowserPreferences.START_URL,
-                BrowserPreferences.DEFAULT_START_URL
-        );
+        // Company-specific APK: the URL baked into BrowserPreferences is authoritative.
+        String newStartUrl = BrowserPreferences.DEFAULT_START_URL;
         boolean previousDesktop = webView != null
                 && !webView.getSettings().getUserAgentString().equals(mobileUserAgent);
         boolean fullscreen = preferences.getBoolean(BrowserPreferences.FULLSCREEN, false);
         boolean keepAwake = preferences.getBoolean(BrowserPreferences.KEEP_SCREEN_ON, false);
         boolean desktop = preferences.getBoolean(BrowserPreferences.DESKTOP_MODE, false);
-        restrictToStartHost = preferences.getBoolean(
-                BrowserPreferences.RESTRICT_TO_START_HOST,
-                false
-        );
+        // Always restrict web navigation to the configured company's host.
+        restrictToStartHost = true;
         blockExternalApps = preferences.getBoolean(
                 BrowserPreferences.BLOCK_EXTERNAL_APPS,
                 false
