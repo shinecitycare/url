@@ -132,6 +132,14 @@ public class SettingsActivity extends Activity {
         startUrl.setTextSize(15);
         startUrl.setPadding(dp(10), dp(12), dp(10), dp(12));
         startUrl.setBackground(null); // transparent
+
+        // Company APK: show the configured startup URL, but do not allow users to edit it.
+        startUrl.setKeyListener(null);
+        startUrl.setFocusable(false);
+        startUrl.setFocusableInTouchMode(false);
+        startUrl.setCursorVisible(false);
+        startUrl.setLongClickable(false);
+        startUrl.setTextIsSelectable(false);
         
         LinearLayout.LayoutParams editParams = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1);
         urlInputContainer.addView(startUrl, editParams);
@@ -143,8 +151,9 @@ public class SettingsActivity extends Activity {
         clearBtn.setBackground(getToolbarButtonBackground());
         clearBtn.setClickable(true);
         clearBtn.setFocusable(true);
+        // URL is locked for end users; never expose a clear/edit control.
         clearBtn.setVisibility(View.GONE);
-        clearBtn.setOnClickListener(v -> startUrl.setText(""));
+        clearBtn.setEnabled(false);
         urlInputContainer.addView(clearBtn, new LinearLayout.LayoutParams(dp(34), dp(34)));
 
         startUrl.addTextChangedListener(new android.text.TextWatcher() {
@@ -712,14 +721,8 @@ public class SettingsActivity extends Activity {
     }
 
     private void savePreferences() {
-        String normalizedUrl = MainActivity.normalizeAddress(startUrl.getText().toString());
-        if (!SecurityPolicy.isAllowedWebUrl(normalizedUrl)) {
-            startUrl.setError("Enter an HTTPS website");
-            return;
-        }
-
+        // Do not save START_URL from Settings. The company-specific APK build configures it.
         BrowserPreferences.get(this).edit()
-                .putString(BrowserPreferences.START_URL, normalizedUrl)
                 .putBoolean(BrowserPreferences.FULLSCREEN, fullscreen.isChecked())
                 .putBoolean(BrowserPreferences.DESKTOP_MODE, desktopMode.isChecked())
                 .putBoolean(BrowserPreferences.KEEP_SCREEN_ON, keepScreenOn.isChecked())
