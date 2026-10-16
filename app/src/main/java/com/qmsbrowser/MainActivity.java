@@ -487,7 +487,8 @@ public class MainActivity extends Activity {
 
         LinearLayout.LayoutParams addressParams = new LinearLayout.LayoutParams(0, dp(42), 1);
         addressParams.setMargins(dp(4), 0, dp(4), 0);
-        bar.addView(addressContainer, addressParams);
+        // URL/address box hidden: keep toolbar controls only.
+        // bar.addView(addressContainer, addressParams);
 
         menuButton = toolbarButton(R.drawable.ic_more_vert, "Menu");
         menuButton.setOnClickListener(this::showMenu);
