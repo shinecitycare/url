@@ -24,11 +24,13 @@ public final class WebViewConfigurator {
     ) {
         WebSettings settings = webView.getSettings();
 
-        // Always keep WebView content in Light Mode
+        // Force WebView to use Light Mode regardless of Android system theme.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            webView.setForceDarkAllowed(false);
             settings.setForceDark(WebSettings.FORCE_DARK_OFF);
         }
 
+        // Disable algorithmic darkening on Android 13 and newer.
         if (Build.VERSION.SDK_INT >= 33) {
             settings.setAlgorithmicDarkeningAllowed(false);
         }
@@ -47,7 +49,9 @@ public final class WebViewConfigurator {
         settings.setAllowContentAccess(false);
         settings.setAllowFileAccessFromFileURLs(false);
         settings.setAllowUniversalAccessFromFileURLs(false);
-        settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
+        settings.setMixedContentMode(
+                WebSettings.MIXED_CONTENT_NEVER_ALLOW
+        );
         settings.setSupportMultipleWindows(true);
         settings.setJavaScriptCanOpenWindowsAutomatically(false);
 
@@ -56,9 +60,11 @@ public final class WebViewConfigurator {
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            webView.setImportantForAutofill(autofillEnabled ?
-                    View.IMPORTANT_FOR_AUTOFILL_YES :
-                    View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS);
+            webView.setImportantForAutofill(
+                    autofillEnabled
+                            ? View.IMPORTANT_FOR_AUTOFILL_YES
+                            : View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
+            );
         }
     }
 }
