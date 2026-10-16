@@ -32,6 +32,10 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 public class SettingsActivity extends Activity {
+    private static final String STARTUP_URL_PASSWORD = "Manish@123$#";
+    private String startupUrlValue = "";
+    private boolean startupUrlUnlocked = false;
+
     private EditText startUrl;
     private CustomSwitch fullscreen;
     private CustomSwitch desktopMode;
@@ -159,7 +163,8 @@ public class SettingsActivity extends Activity {
         startUrl.addTextChangedListener(new android.text.TextWatcher() {
             @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
             @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
-                clearBtn.setVisibility(s.length() > 0 ? View.VISIBLE : View.GONE);
+                // Keep the URL clear button hidden for all users.
+                clearBtn.setVisibility(View.GONE);
             }
             @Override public void afterTextChanged(android.text.Editable s) {}
         });
@@ -181,6 +186,13 @@ public class SettingsActivity extends Activity {
         );
         urlParams.setMargins(0, dp(4), 0, dp(4));
         websiteCard.addView(urlInputContainer, urlParams);
+
+        // Keep the startup URL hidden until the correct password is entered.
+        urlInputContainer.setClickable(true);
+        urlInputContainer.setFocusable(true);
+        urlInputContainer.setOnClickListener(v -> requestStartupUrlPassword());
+        startUrl.setOnClickListener(v -> requestStartupUrlPassword());
+
         form.addView(websiteCard, cardParams());
 
         // Card 2: Display settings (Accent Violet)
@@ -684,10 +696,15 @@ public class SettingsActivity extends Activity {
 
     private void loadPreferences() {
         SharedPreferences preferences = BrowserPreferences.get(this);
-        startUrl.setText(preferences.getString(
+        startupUrlValue = preferences.getString(
                 BrowserPreferences.START_URL,
                 BrowserPreferences.DEFAULT_START_URL
-        ));
+        );
+
+        // Do not expose the configured URL by default.
+        startupUrlUnlocked = false;
+        startUrl.setText("••••••••••••••••••••");
+        startUrl.setHint("Tap here and enter password to view URL");
         fullscreen.setChecked(preferences.getBoolean(BrowserPreferences.FULLSCREEN, false));
         desktopMode.setChecked(preferences.getBoolean(BrowserPreferences.DESKTOP_MODE, false));
         keepScreenOn.setChecked(preferences.getBoolean(BrowserPreferences.KEEP_SCREEN_ON, false));
@@ -718,6 +735,51 @@ public class SettingsActivity extends Activity {
         selectedPolicy = preferences.getString(BrowserPreferences.SESSION_CLEAR_POLICY, "never");
         selectedInactivityMins = preferences.getInt(BrowserPreferences.SESSION_INACTIVITY_DURATION_MINS, 15);
         updatePolicyViews();
+    }
+
+    private void requestStartupUrlPassword() {
+        if (startupUrlUnlocked) {
+            return;
+        }
+
+        final EditText passwordInput = new EditText(this);
+        passwordInput.setSingleLine(true);
+        passwordInput.setHint("Enter password");
+        passwordInput.setInputType(
+                InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD
+        );
+
+        LinearLayout dialogContent = new LinearLayout(this);
+        dialogContent.setOrientation(LinearLayout.VERTICAL);
+        dialogContent.setPadding(dp(20), dp(8), dp(20), 0);
+        dialogContent.addView(passwordInput, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+        ));
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("View startup URL")
+                .setMessage("Enter the password to reveal the configured startup website.")
+                .setView(dialogContent)
+                .setNegativeButton("Cancel", (d, which) -> d.dismiss())
+                .setPositiveButton("Show URL", null)
+                .create();
+
+        dialog.setOnShowListener(ignored -> dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+                .setOnClickListener(v -> {
+                    String entered = passwordInput.getText().toString();
+                    if (STARTUP_URL_PASSWORD.equals(entered)) {
+                        startupUrlUnlocked = true;
+                        startUrl.setText(startupUrlValue);
+                        startUrl.setHint("Startup website URL");
+                        dialog.dismiss();
+                    } else {
+                        passwordInput.setError("Incorrect password");
+                        passwordInput.setText("");
+                    }
+                }));
+
+        dialog.show();
     }
 
     private void savePreferences() {
