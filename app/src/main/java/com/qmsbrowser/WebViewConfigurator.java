@@ -23,6 +23,16 @@ public final class WebViewConfigurator {
             boolean allowZoom
     ) {
         WebSettings settings = webView.getSettings();
+
+        // Always keep WebView content in Light Mode
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            settings.setForceDark(WebSettings.FORCE_DARK_OFF);
+        }
+
+        if (Build.VERSION.SDK_INT >= 33) {
+            settings.setAlgorithmicDarkeningAllowed(false);
+        }
+
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
         settings.setDatabaseEnabled(true);
@@ -40,13 +50,14 @@ public final class WebViewConfigurator {
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
         settings.setSupportMultipleWindows(true);
         settings.setJavaScriptCanOpenWindowsAutomatically(false);
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             settings.setSafeBrowsingEnabled(true);
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            webView.setImportantForAutofill(autofillEnabled ? 
-                    View.IMPORTANT_FOR_AUTOFILL_YES : 
+            webView.setImportantForAutofill(autofillEnabled ?
+                    View.IMPORTANT_FOR_AUTOFILL_YES :
                     View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS);
         }
     }
