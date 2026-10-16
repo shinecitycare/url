@@ -32,8 +32,10 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 public class SettingsActivity extends Activity {
-    // Note: a password embedded in an APK can be extracted; use server-side authentication for strong protection.
-    private static final String STARTUP_URL_VIEW_PASSWORD = "Manish@123$#";
+    private static final String STARTUP_URL_PASSWORD = "Manish@123$#";
+    private String startupUrlValue = "";
+    private boolean startupUrlUnlocked = false;
+
     private EditText startUrl;
     private CustomSwitch fullscreen;
     private CustomSwitch desktopMode;
@@ -105,20 +107,13 @@ public class SettingsActivity extends Activity {
         int colorViolet = Color.rgb(124, 58, 237);
         LinearLayout websiteCard = card();
         websiteCard.addView(cardHeader(R.drawable.ic_globe, "Startup website", colorViolet));
-
-        Button revealStartupUrlButton = actionButton("View startup URL", false);
-        LinearLayout.LayoutParams revealButtonParams = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, dp(44));
-        revealButtonParams.setMargins(0, dp(8), 0, dp(8));
-        websiteCard.addView(revealStartupUrlButton, revealButtonParams);
-
+        
         TextView urlLabel = new TextView(this);
         urlLabel.setText("Configure the default home and launch URL:");
         urlLabel.setTextSize(13);
         urlLabel.setTextColor(Color.rgb(142, 146, 178)); // secondary text
         urlLabel.setPadding(0, dp(4), 0, dp(8));
         websiteCard.addView(urlLabel);
-        urlLabel.setVisibility(View.GONE);
 
         // input field layout container
         LinearLayout urlInputContainer = new LinearLayout(this);
@@ -168,6 +163,7 @@ public class SettingsActivity extends Activity {
         startUrl.addTextChangedListener(new android.text.TextWatcher() {
             @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
             @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
+                // Keep the URL clear button hidden for all users.
                 clearBtn.setVisibility(View.GONE);
             }
             @Override public void afterTextChanged(android.text.Editable s) {}
@@ -190,41 +186,13 @@ public class SettingsActivity extends Activity {
         );
         urlParams.setMargins(0, dp(4), 0, dp(4));
         websiteCard.addView(urlInputContainer, urlParams);
-        urlInputContainer.setVisibility(View.GONE);
 
-        revealStartupUrlButton.setOnClickListener(v -> {
-            EditText passwordInput = new EditText(SettingsActivity.this);
-            passwordInput.setSingleLine(true);
-            passwordInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
-            passwordInput.setHint("Enter password");
-            int dialogPadding = dp(20);
-            LinearLayout passwordContainer = new LinearLayout(SettingsActivity.this);
-            passwordContainer.setOrientation(LinearLayout.VERTICAL);
-            passwordContainer.setPadding(dialogPadding, dp(8), dialogPadding, 0);
-            passwordContainer.addView(passwordInput, new LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        // Keep the startup URL hidden until the correct password is entered.
+        urlInputContainer.setClickable(true);
+        urlInputContainer.setFocusable(true);
+        urlInputContainer.setOnClickListener(v -> requestStartupUrlPassword());
+        startUrl.setOnClickListener(v -> requestStartupUrlPassword());
 
-            AlertDialog passwordDialog = new AlertDialog.Builder(SettingsActivity.this)
-                    .setTitle("Verify password")
-                    .setMessage("Enter password to view the startup website URL.")
-                    .setView(passwordContainer)
-                    .setNegativeButton("Cancel", (dialog, which) -> dialog.dismiss())
-                    .setPositiveButton("Verify", null)
-                    .create();
-            passwordDialog.setOnShowListener(dialog -> passwordDialog.getButton(AlertDialog.BUTTON_POSITIVE)
-                    .setOnClickListener(button -> {
-                        if (STARTUP_URL_VIEW_PASSWORD.equals(passwordInput.getText().toString())) {
-                            urlLabel.setVisibility(View.VISIBLE);
-                            urlInputContainer.setVisibility(View.VISIBLE);
-                            revealStartupUrlButton.setVisibility(View.GONE);
-                            passwordDialog.dismiss();
-                        } else {
-                            passwordInput.setError("Incorrect password");
-                            passwordInput.setText("");
-                        }
-                    }));
-            passwordDialog.show();
-        });
         form.addView(websiteCard, cardParams());
 
         // Card 2: Display settings (Accent Violet)
@@ -728,10 +696,15 @@ public class SettingsActivity extends Activity {
 
     private void loadPreferences() {
         SharedPreferences preferences = BrowserPreferences.get(this);
-        startUrl.setText(preferences.getString(
+        startupUrlValue = preferences.getString(
                 BrowserPreferences.START_URL,
                 BrowserPreferences.DEFAULT_START_URL
-        ));
+        );
+
+        // Do not expose the configured URL by default.
+        startupUrlUnlocked = false;
+        startUrl.setText("••••••••••••••••••••");
+        startUrl.setHint("Tap here and enter password to view URL");
         fullscreen.setChecked(preferences.getBoolean(BrowserPreferences.FULLSCREEN, false));
         desktopMode.setChecked(preferences.getBoolean(BrowserPreferences.DESKTOP_MODE, false));
         keepScreenOn.setChecked(preferences.getBoolean(BrowserPreferences.KEEP_SCREEN_ON, false));
@@ -762,6 +735,51 @@ public class SettingsActivity extends Activity {
         selectedPolicy = preferences.getString(BrowserPreferences.SESSION_CLEAR_POLICY, "never");
         selectedInactivityMins = preferences.getInt(BrowserPreferences.SESSION_INACTIVITY_DURATION_MINS, 15);
         updatePolicyViews();
+    }
+
+    private void requestStartupUrlPassword() {
+        if (startupUrlUnlocked) {
+            return;
+        }
+
+        final EditText passwordInput = new EditText(this);
+        passwordInput.setSingleLine(true);
+        passwordInput.setHint("Enter password");
+        passwordInput.setInputType(
+                InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD
+        );
+
+        LinearLayout dialogContent = new LinearLayout(this);
+        dialogContent.setOrientation(LinearLayout.VERTICAL);
+        dialogContent.setPadding(dp(20), dp(8), dp(20), 0);
+        dialogContent.addView(passwordInput, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+        ));
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("View startup URL")
+                .setMessage("Enter the password to reveal the configured startup website.")
+                .setView(dialogContent)
+                .setNegativeButton("Cancel", (d, which) -> d.dismiss())
+                .setPositiveButton("Show URL", null)
+                .create();
+
+        dialog.setOnShowListener(ignored -> dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+                .setOnClickListener(v -> {
+                    String entered = passwordInput.getText().toString();
+                    if (STARTUP_URL_PASSWORD.equals(entered)) {
+                        startupUrlUnlocked = true;
+                        startUrl.setText(startupUrlValue);
+                        startUrl.setHint("Startup website URL");
+                        dialog.dismiss();
+                    } else {
+                        passwordInput.setError("Incorrect password");
+                        passwordInput.setText("");
+                    }
+                }));
+
+        dialog.show();
     }
 
     private void savePreferences() {
