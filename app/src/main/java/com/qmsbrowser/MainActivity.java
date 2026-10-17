@@ -1637,6 +1637,44 @@ public class MainActivity extends Activity {
         return true;
     }
 
+    /**
+     * Adds temporary JavaScript diagnostics for Geolocation API calls made after
+     * the page has loaded. Coordinates are not recorded; only accuracy and timing
+     * metadata are logged to help diagnose stale-position errors.
+     */
+    private void installGpsJavaScriptDiagnostics(WebView target, String label) {
+        if (target == null) {
+            recordGpsDiagnostic(label + " GPS JS instrumentation skipped: WebView is null");
+            return;
+        }
+
+        String script =
+                "(function(){try{" +
+                "if(window.__qmsGpsDiagInstalled){console.log('[GPS_DIAG_JS] already installed');return;}" +
+                "if(!navigator.geolocation){console.log('[GPS_DIAG_JS] geolocation API unavailable');return;}" +
+                "window.__qmsGpsDiagInstalled=true;" +
+                "var g=navigator.geolocation;" +
+                "var oldGet=g.getCurrentPosition.bind(g);" +
+                "var oldWatch=g.watchPosition.bind(g);" +
+                "g.getCurrentPosition=function(ok,fail,opts){" +
+                "console.log('[GPS_DIAG_JS] getCurrentPosition called; timeout='+(opts&&opts.timeout)+'; maximumAge='+(opts&&opts.maximumAge)+'; highAccuracy='+(opts&&opts.enableHighAccuracy));" +
+                "return oldGet(function(p){try{console.log('[GPS_DIAG_JS] SUCCESS getCurrentPosition; accuracy='+p.coords.accuracy+'m; timestamp='+p.timestamp+'; ageMs='+(Date.now()-p.timestamp));}catch(e){} if(ok)ok(p);}," +
+                "function(e){console.log('[GPS_DIAG_JS] ERROR getCurrentPosition; code='+e.code+'; message='+e.message);if(fail)fail(e);},opts);" +
+                "};" +
+                "g.watchPosition=function(ok,fail,opts){" +
+                "console.log('[GPS_DIAG_JS] watchPosition called; timeout='+(opts&&opts.timeout)+'; maximumAge='+(opts&&opts.maximumAge)+'; highAccuracy='+(opts&&opts.enableHighAccuracy));" +
+                "return oldWatch(function(p){try{console.log('[GPS_DIAG_JS] SUCCESS watchPosition; accuracy='+p.coords.accuracy+'m; timestamp='+p.timestamp+'; ageMs='+(Date.now()-p.timestamp));}catch(e){} if(ok)ok(p);}," +
+                "function(e){console.log('[GPS_DIAG_JS] ERROR watchPosition; code='+e.code+'; message='+e.message);if(fail)fail(e);},opts);" +
+                "};" +
+                "console.log('[GPS_DIAG_JS] instrumentation installed; url='+location.href);" +
+                "}catch(e){console.log('[GPS_DIAG_JS] instrumentation exception: '+e);}})();";
+
+        recordGpsDiagnostic(label + " installing GPS JavaScript diagnostics; url=" + target.getUrl());
+        target.evaluateJavascript(script, result -> {
+            recordGpsDiagnostic(label + " GPS JavaScript instrumentation result=" + result);
+        });
+    }
+
     private final class BrowserClient extends WebViewClient {
         @Override
         public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
@@ -1690,6 +1728,8 @@ public class MainActivity extends Activity {
 
         @Override
         public void onPageFinished(WebView view, String url) {
+            recordGpsDiagnostic("Main WebView page finished: " + url);
+            installGpsJavaScriptDiagnostics(view, "MAIN");
             stopReloadAnimation();
             updateAddressState(url);
             progressBar.setVisibility(View.GONE);
@@ -1936,6 +1976,12 @@ public class MainActivity extends Activity {
             popupDialog.setContentView(layout);
             
             popupWebView.setWebViewClient(new WebViewClient() {
+                @Override
+                public void onPageFinished(WebView popupView, String url) {
+                    recordGpsDiagnostic("Popup WebView page finished: " + url);
+                    installGpsJavaScriptDiagnostics(popupView, "POPUP");
+                }
+
                 @Override
                 public boolean shouldOverrideUrlLoading(WebView popupView, WebResourceRequest request) {
                     return handlePopupNavigation(request.getUrl());
