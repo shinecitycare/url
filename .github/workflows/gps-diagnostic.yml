@@ -1,3 +1,4 @@
+
 name: Build GPS Diagnostic APK
 
 on:
@@ -6,12 +7,10 @@ on:
 permissions:
   contents: read
 
-env:
-  JAVA_VERSION: "17"
-
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -20,11 +19,16 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: ${{ env.JAVA_VERSION }}
+          java-version: "17"
           cache: gradle
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+
+      - name: Accept Android SDK licenses
+        run: yes | sdkmanager --licenses || true
 
       - name: Build diagnostic APK
         run: |
