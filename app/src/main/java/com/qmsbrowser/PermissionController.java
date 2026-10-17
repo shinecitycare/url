@@ -27,6 +27,7 @@ public final class PermissionController {
 
     private GeolocationPermissions.Callback geolocationCallback;
     private String geolocationOrigin;
+    private WebView geolocationWebView;
 
     private static final int REQUEST_WEB_PERMISSIONS = 102;
     private static final int REQUEST_LOCATION = 103;
@@ -38,6 +39,13 @@ public final class PermissionController {
                 PREFS_NAME, Activity.MODE_PRIVATE);
     }
 
+    private void gpsLog(String message) {
+        Log.d("GPS_DEBUG", message);
+        if (activity instanceof MainActivity) {
+            ((MainActivity) activity).recordGpsDiagnostic(message);
+        }
+    }
+
     public void handlePermissionRequest(
             PermissionRequest request,
             WebView webView,
@@ -46,8 +54,12 @@ public final class PermissionController {
 
         Uri origin = request.getOrigin();
 
+        gpsLog("Web permission request: origin=" + origin + ", currentUrl="
+                + (webView != null ? webView.getUrl() : "null") + ", resources="
+                + java.util.Arrays.toString(request.getResources()));
         if (!isAllowedPermissionOrigin(
                 origin, webView, restrictToStartHost, configuredStartUrl)) {
+            gpsLog("Web permission denied by origin validation: " + origin);
             request.deny();
             return;
         }
@@ -128,15 +140,16 @@ public final class PermissionController {
 
         Uri originUri = Uri.parse(origin);
 
-        Log.d("GPS_DEBUG", "Geolocation prompt: origin=" + origin
+        gpsLog("Geolocation prompt: origin=" + origin
                 + ", currentUrl=" + (webView != null ? webView.getUrl() : "null")
                 + ", hasLocationPermission=" + hasLocationPermission()
                 + ", restrictToStartHost=" + restrictToStartHost
                 + ", configuredStartUrl=" + configuredStartUrl);
 
+        logDeviceLocationState();
         if (!isAllowedPermissionOrigin(
                 originUri, webView, restrictToStartHost, configuredStartUrl)) {
-            Log.e("GPS_DEBUG", "Geolocation denied: origin/current URL/allowed-host validation failed.");
+            gpsLog("Geolocation denied: origin/current URL/allowed-host validation failed.");
             callback.invoke(origin, false, false);
             return;
         }
@@ -145,7 +158,7 @@ public final class PermissionController {
 
         // Previously allowed website + current Android location permission.
         if (isLocationPermissionSaved(originKey) && hasLocationPermission()) {
-            Log.d("GPS_DEBUG", "Previously saved website location permission accepted: " + origin);
+            gpsLog("Previously saved website location permission accepted: " + origin);
             callback.invoke(origin, true, true);
             return;
         }
@@ -153,17 +166,22 @@ public final class PermissionController {
         new AlertDialog.Builder(activity)
                 .setTitle("Allow location access?")
                 .setMessage(origin + " wants to use this device's location.")
-                .setNegativeButton("Block", (dialog, which) ->
-                        callback.invoke(origin, false, false))
+                .setNegativeButton("Block", (dialog, which) -> {
+                    gpsLog("User blocked website geolocation: " + origin);
+                    callback.invoke(origin, false, false);
+                })
                 .setPositiveButton("Allow", (dialog, which) -> {
-                    Log.d("GPS_DEBUG", "User pressed Allow. Android location permission=" + hasLocationPermission());
+                    gpsLog("User pressed Allow. Android location permission=" + hasLocationPermission());
                     if (hasLocationPermission()) {
                         saveLocationPermission(originKey);
                         callback.invoke(origin, true, true);
-                        Log.d("GPS_DEBUG", "Geolocation callback invoked: allowed=true (permission already granted).");
+                        gpsLog("Geolocation callback invoked: allowed=true (permission already granted).");
                     } else {
                         geolocationOrigin = origin;
                         geolocationCallback = callback;
+                        geolocationWebView = webView;
+                        gpsLog("Stored WebView for pending location permission: "
+                                + (webView != null ? webView.getUrl() : "null"));
 
                         activity.requestPermissions(
                                 new String[]{
@@ -173,8 +191,10 @@ public final class PermissionController {
                                 REQUEST_LOCATION);
                     }
                 })
-                .setOnCancelListener(dialog ->
-                        callback.invoke(origin, false, false))
+                .setOnCancelListener(dialog -> {
+                    gpsLog("Geolocation permission dialog cancelled: " + origin);
+                    callback.invoke(origin, false, false);
+                })
                 .show();
     }
 
@@ -218,14 +238,15 @@ public final class PermissionController {
             GeolocationPermissions.Callback callback = geolocationCallback;
 
             boolean androidLocationGranted = hasLocationPermission();
+            WebView requestingWebView = geolocationWebView != null ? geolocationWebView : webView;
             boolean originAllowed = origin != null
                     && isAllowedPermissionOrigin(
-                    Uri.parse(origin), webView,
+                    Uri.parse(origin), requestingWebView,
                     restrictToStartHost, configuredStartUrl);
             boolean allowed = origin != null && androidLocationGranted && originAllowed;
 
-            Log.d("GPS_DEBUG", "Android permission result: origin=" + origin
-                    + ", currentUrl=" + (webView != null ? webView.getUrl() : "null")
+            gpsLog("Android permission result: origin=" + origin
+                    + ", currentUrl=" + (requestingWebView != null ? requestingWebView.getUrl() : "null")
                     + ", androidLocationGranted=" + androidLocationGranted
                     + ", originAllowed=" + originAllowed
                     + ", finalAllowed=" + allowed);
@@ -235,11 +256,12 @@ public final class PermissionController {
             }
 
             callback.invoke(origin, allowed, allowed);
-            Log.d("GPS_DEBUG", "Geolocation callback invoked: allowed=" + allowed
+            gpsLog("Geolocation callback invoked: allowed=" + allowed
                     + ", retain=" + allowed);
 
             geolocationCallback = null;
             geolocationOrigin = null;
+            geolocationWebView = null;
         }
     }
 
@@ -313,20 +335,20 @@ public final class PermissionController {
             String configuredStartUrl) {
 
         if (origin == null || origin.getHost() == null) {
-            Log.e("GPS_DEBUG", "Origin rejected: missing origin/host. origin=" + origin);
+            gpsLog("Origin rejected: missing origin/host. origin=" + origin);
             return false;
         }
 
         String scheme = origin.getScheme();
         if (!"https".equalsIgnoreCase(scheme)
                 && !"http".equalsIgnoreCase(scheme)) {
-            Log.e("GPS_DEBUG", "Origin rejected: unsupported scheme=" + scheme);
+            gpsLog("Origin rejected: unsupported scheme=" + scheme);
             return false;
         }
 
         String currentUrl = webView != null ? webView.getUrl() : null;
         if (currentUrl == null) {
-            Log.e("GPS_DEBUG", "Origin rejected: current WebView URL is null.");
+            gpsLog("Origin rejected: current WebView URL is null.");
             return false;
         }
 
@@ -337,11 +359,11 @@ public final class PermissionController {
                 activity, origin, configuredStartUrl, restrictToStartHost);
 
         if (!sameAuthority) {
-            Log.e("GPS_DEBUG", "Origin rejected: authority mismatch. origin="
+            gpsLog("Origin rejected: authority mismatch. origin="
                     + origin.getAuthority() + ", current=" + current.getAuthority());
         }
         if (!kioskHostAllowed) {
-            Log.e("GPS_DEBUG", "Origin rejected: NavigationPolicy rejected host. origin="
+            gpsLog("Origin rejected: NavigationPolicy rejected host. origin="
                     + origin + ", configuredStartUrl=" + configuredStartUrl);
         }
 
@@ -357,6 +379,20 @@ public final class PermissionController {
         return camera && microphone
                 ? "your camera and microphone"
                 : camera ? "your camera" : "your microphone";
+    }
+
+    private void logDeviceLocationState() {
+        try {
+            android.location.LocationManager manager = (android.location.LocationManager)
+                    activity.getSystemService(Activity.LOCATION_SERVICE);
+            boolean gps = manager != null && manager.isProviderEnabled(android.location.LocationManager.GPS_PROVIDER);
+            boolean network = manager != null && manager.isProviderEnabled(android.location.LocationManager.NETWORK_PROVIDER);
+            gpsLog("Device location providers: GPS=" + gps + ", NETWORK=" + network
+                    + ", finePermission=" + (activity.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED)
+                    + ", coarsePermission=" + (activity.checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED));
+        } catch (Exception e) {
+            gpsLog("Could not inspect location providers: " + e.getClass().getSimpleName() + ": " + e.getMessage());
+        }
     }
 
     private boolean hasLocationPermission() {
