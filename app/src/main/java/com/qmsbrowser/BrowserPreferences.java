@@ -20,7 +20,7 @@ final class BrowserPreferences {
     static final String SESSION_INACTIVITY_DURATION_MINS = "session_inactivity_duration_mins";
     static final String NEXT_SCHEDULED_CLEAR_TIME = "next_scheduled_clear_time";
 
-    static final String DEFAULT_START_URL = "https://www.google.com/";
+    static final String DEFAULT_START_URL = "https://prarabdha.com/StudentAttendance.aspx?companyCode=XCLL-E7C76B";
 
     private BrowserPreferences() {
     }
