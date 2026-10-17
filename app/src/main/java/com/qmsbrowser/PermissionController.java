@@ -7,6 +7,7 @@ import android.app.AlertDialog;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.net.Uri;
+import android.util.Log;
 import android.webkit.GeolocationPermissions;
 import android.webkit.PermissionRequest;
 import android.webkit.WebView;
@@ -127,8 +128,15 @@ public final class PermissionController {
 
         Uri originUri = Uri.parse(origin);
 
+        Log.d("GPS_DEBUG", "Geolocation prompt: origin=" + origin
+                + ", currentUrl=" + (webView != null ? webView.getUrl() : "null")
+                + ", hasLocationPermission=" + hasLocationPermission()
+                + ", restrictToStartHost=" + restrictToStartHost
+                + ", configuredStartUrl=" + configuredStartUrl);
+
         if (!isAllowedPermissionOrigin(
                 originUri, webView, restrictToStartHost, configuredStartUrl)) {
+            Log.e("GPS_DEBUG", "Geolocation denied: origin/current URL/allowed-host validation failed.");
             callback.invoke(origin, false, false);
             return;
         }
@@ -137,6 +145,7 @@ public final class PermissionController {
 
         // Previously allowed website + current Android location permission.
         if (isLocationPermissionSaved(originKey) && hasLocationPermission()) {
+            Log.d("GPS_DEBUG", "Previously saved website location permission accepted: " + origin);
             callback.invoke(origin, true, true);
             return;
         }
@@ -147,9 +156,11 @@ public final class PermissionController {
                 .setNegativeButton("Block", (dialog, which) ->
                         callback.invoke(origin, false, false))
                 .setPositiveButton("Allow", (dialog, which) -> {
+                    Log.d("GPS_DEBUG", "User pressed Allow. Android location permission=" + hasLocationPermission());
                     if (hasLocationPermission()) {
                         saveLocationPermission(originKey);
                         callback.invoke(origin, true, true);
+                        Log.d("GPS_DEBUG", "Geolocation callback invoked: allowed=true (permission already granted).");
                     } else {
                         geolocationOrigin = origin;
                         geolocationCallback = callback;
@@ -206,17 +217,26 @@ public final class PermissionController {
             String origin = geolocationOrigin;
             GeolocationPermissions.Callback callback = geolocationCallback;
 
-            boolean allowed = origin != null
-                    && hasLocationPermission()
+            boolean androidLocationGranted = hasLocationPermission();
+            boolean originAllowed = origin != null
                     && isAllowedPermissionOrigin(
                     Uri.parse(origin), webView,
                     restrictToStartHost, configuredStartUrl);
+            boolean allowed = origin != null && androidLocationGranted && originAllowed;
+
+            Log.d("GPS_DEBUG", "Android permission result: origin=" + origin
+                    + ", currentUrl=" + (webView != null ? webView.getUrl() : "null")
+                    + ", androidLocationGranted=" + androidLocationGranted
+                    + ", originAllowed=" + originAllowed
+                    + ", finalAllowed=" + allowed);
 
             if (allowed) {
                 saveLocationPermission(getOriginKey(Uri.parse(origin)));
             }
 
             callback.invoke(origin, allowed, allowed);
+            Log.d("GPS_DEBUG", "Geolocation callback invoked: allowed=" + allowed
+                    + ", retain=" + allowed);
 
             geolocationCallback = null;
             geolocationOrigin = null;
@@ -293,26 +313,39 @@ public final class PermissionController {
             String configuredStartUrl) {
 
         if (origin == null || origin.getHost() == null) {
+            Log.e("GPS_DEBUG", "Origin rejected: missing origin/host. origin=" + origin);
             return false;
         }
 
         String scheme = origin.getScheme();
         if (!"https".equalsIgnoreCase(scheme)
                 && !"http".equalsIgnoreCase(scheme)) {
+            Log.e("GPS_DEBUG", "Origin rejected: unsupported scheme=" + scheme);
             return false;
         }
 
-        String currentUrl = webView.getUrl();
+        String currentUrl = webView != null ? webView.getUrl() : null;
         if (currentUrl == null) {
+            Log.e("GPS_DEBUG", "Origin rejected: current WebView URL is null.");
             return false;
         }
 
         Uri current = Uri.parse(currentUrl);
-
-        return current.getAuthority() != null
-                && current.getAuthority().equalsIgnoreCase(origin.getAuthority())
-                && NavigationPolicy.isAllowedKioskHost(
+        boolean sameAuthority = current.getAuthority() != null
+                && current.getAuthority().equalsIgnoreCase(origin.getAuthority());
+        boolean kioskHostAllowed = NavigationPolicy.isAllowedKioskHost(
                 activity, origin, configuredStartUrl, restrictToStartHost);
+
+        if (!sameAuthority) {
+            Log.e("GPS_DEBUG", "Origin rejected: authority mismatch. origin="
+                    + origin.getAuthority() + ", current=" + current.getAuthority());
+        }
+        if (!kioskHostAllowed) {
+            Log.e("GPS_DEBUG", "Origin rejected: NavigationPolicy rejected host. origin="
+                    + origin + ", configuredStartUrl=" + configuredStartUrl);
+        }
+
+        return sameAuthority && kioskHostAllowed;
     }
 
     private String describeWebResources(List<String> resources) {
