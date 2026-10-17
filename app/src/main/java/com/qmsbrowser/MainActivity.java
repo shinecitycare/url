@@ -2028,42 +2028,6 @@ public class MainActivity extends Activity {
                     }
                 }
 
-                // Handle camera/microphone requests originating inside the popup WebView.
-                @Override
-                public void onPermissionRequest(PermissionRequest request) {
-                    runOnUiThread(() -> {
-                        if (permissionController != null) {
-                            permissionController.handlePermissionRequest(
-                                    request,
-                                    popupWebView,
-                                    restrictToStartHost,
-                                    configuredStartUrl
-                            );
-                        } else {
-                            request.deny();
-                        }
-                    });
-                }
-
-                // Handle GPS requests originating inside the popup WebView as well.
-                @Override
-                public void onGeolocationPermissionsShowPrompt(
-                        String origin,
-                        GeolocationPermissions.Callback callback
-                ) {
-                    if (permissionController != null && popupWebView != null) {
-                        permissionController.handleGeolocationPermissionsShowPrompt(
-                                origin,
-                                callback,
-                                popupWebView,
-                                restrictToStartHost,
-                                configuredStartUrl
-                        );
-                    } else {
-                        callback.invoke(origin, false, false);
-                    }
-                }
-
                 @Override
                 public void onPermissionRequestCanceled(PermissionRequest request) {
                     // The permission controller handles any pending request state.
