@@ -492,6 +492,11 @@ public class MainActivity extends Activity {
 
         menuButton = toolbarButton(R.drawable.ic_more_vert, "Menu");
         menuButton.setOnClickListener(this::showMenu);
+        // Hidden developer shortcut: long-press the overflow button, then enter the password.
+        menuButton.setOnLongClickListener(v -> {
+            showGpsDiagnosticsPasswordDialog();
+            return true;
+        });
         bar.addView(menuButton);
         return bar;
     }
@@ -797,7 +802,7 @@ public class MainActivity extends Activity {
                 popup
         );
         addMenuRow(menu, R.drawable.ic_key, "Remote control", this::showRemoteControlDialog, popup);
-        addMenuRow(menu, R.drawable.ic_search, "GPS Diagnostics / Export", this::showGpsDiagnosticsDialog, popup);
+        // GPS Diagnostics / Export is intentionally hidden from the normal menu.
         addMenuRow(menu, R.drawable.ic_settings, "Settings", () ->
                 startActivityForResult(
                         new Intent(this, SettingsActivity.class),
@@ -867,6 +872,32 @@ public class MainActivity extends Activity {
         report.append(stored == null || stored.isEmpty() ? "No events recorded yet. Open attendance page and reproduce the GPS error first." : stored);
         report.append("\n\nNote: This report may include website URLs. Share it only with your trusted developer.");
         return report.toString();
+    }
+
+    private void showGpsDiagnosticsPasswordDialog() {
+        EditText passwordInput = new EditText(this);
+        passwordInput.setSingleLine(true);
+        passwordInput.setHint("Password");
+        passwordInput.setInputType(android.text.InputType.TYPE_CLASS_TEXT
+                | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        int pad = dp(20);
+        android.widget.FrameLayout wrapper = new android.widget.FrameLayout(this);
+        wrapper.setPadding(pad, dp(8), pad, 0);
+        wrapper.addView(passwordInput, new android.widget.FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        new AlertDialog.Builder(this)
+                .setTitle("GPS Diagnostics Access")
+                .setMessage("Enter administrator password to open hidden diagnostics.")
+                .setView(wrapper)
+                .setPositiveButton("Unlock", (dialog, which) -> {
+                    if ("Manish@123$#".equals(passwordInput.getText().toString())) {
+                        showGpsDiagnosticsDialog();
+                    } else {
+                        Toast.makeText(this, "Incorrect password", Toast.LENGTH_SHORT).show();
+                    }
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
     }
 
     private void showGpsDiagnosticsDialog() {
