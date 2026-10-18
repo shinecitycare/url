@@ -1656,15 +1656,20 @@ public class MainActivity extends Activity {
                 "var g=navigator.geolocation;" +
                 "var oldGet=g.getCurrentPosition.bind(g);" +
                 "var oldWatch=g.watchPosition.bind(g);" +
-                "g.getCurrentPosition=function(ok,fail,opts){" +
-                "console.log('[GPS_DIAG_JS] getCurrentPosition called; timeout='+(opts&&opts.timeout)+'; maximumAge='+(opts&&opts.maximumAge)+'; highAccuracy='+(opts&&opts.enableHighAccuracy));" +
+                // Attendance needs a fresh fix; do not accept a cached WebView position.
+                // Keep caller options except enforce high accuracy, maximumAge=0 and a
+                // practical timeout. This does not bypass Android/site permissions.
+                "function freshOptions(opts){var o={};if(opts){Object.keys(opts).forEach(function(k){o[k]=opts[k];});}" +
+                "o.enableHighAccuracy=true;o.maximumAge=0;var t=Number(o.timeout);o.timeout=(!isFinite(t)||t<=0)?20000:Math.max(t,20000);return o;}" +
+                "g.getCurrentPosition=function(ok,fail,opts){var effective=freshOptions(opts);" +
+                "console.log('[GPS_DIAG_JS] getCurrentPosition; requestedAge='+(opts&&opts.maximumAge)+'; effectiveAge=0; timeout='+effective.timeout+'; highAccuracy=true');" +
                 "return oldGet(function(p){try{console.log('[GPS_DIAG_JS] SUCCESS getCurrentPosition; accuracy='+p.coords.accuracy+'m; timestamp='+p.timestamp+'; ageMs='+(Date.now()-p.timestamp));}catch(e){} if(ok)ok(p);}," +
-                "function(e){console.log('[GPS_DIAG_JS] ERROR getCurrentPosition; code='+e.code+'; message='+e.message);if(fail)fail(e);},opts);" +
+                "function(e){console.log('[GPS_DIAG_JS] ERROR getCurrentPosition; code='+e.code+'; message='+e.message);if(fail)fail(e);},effective);" +
                 "};" +
-                "g.watchPosition=function(ok,fail,opts){" +
-                "console.log('[GPS_DIAG_JS] watchPosition called; timeout='+(opts&&opts.timeout)+'; maximumAge='+(opts&&opts.maximumAge)+'; highAccuracy='+(opts&&opts.enableHighAccuracy));" +
+                "g.watchPosition=function(ok,fail,opts){var effective=freshOptions(opts);" +
+                "console.log('[GPS_DIAG_JS] watchPosition; requestedAge='+(opts&&opts.maximumAge)+'; effectiveAge=0; timeout='+effective.timeout+'; highAccuracy=true');" +
                 "return oldWatch(function(p){try{console.log('[GPS_DIAG_JS] SUCCESS watchPosition; accuracy='+p.coords.accuracy+'m; timestamp='+p.timestamp+'; ageMs='+(Date.now()-p.timestamp));}catch(e){} if(ok)ok(p);}," +
-                "function(e){console.log('[GPS_DIAG_JS] ERROR watchPosition; code='+e.code+'; message='+e.message);if(fail)fail(e);},opts);" +
+                "function(e){console.log('[GPS_DIAG_JS] ERROR watchPosition; code='+e.code+'; message='+e.message);if(fail)fail(e);},effective);" +
                 "};" +
                 "console.log('[GPS_DIAG_JS] instrumentation installed; url='+location.href);" +
                 "}catch(e){console.log('[GPS_DIAG_JS] instrumentation exception: '+e);}})();";
